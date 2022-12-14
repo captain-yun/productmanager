@@ -34,9 +34,28 @@ public class ProductClient {
         scanner = new Scanner(System.in);
 
         list();
+        receive();
+
         while(true) {
             showMenu();
         }
+    }
+
+    private void receive() {
+        Thread thread = new Thread(()-> {
+            while (true) {
+                JSONObject response = null;
+                try {
+                    response = new JSONObject(dis.readUTF());
+                    if(response.getString("status").equals("updated")) {
+                        list();
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+        thread.start();
     }
 
     private void showMenu() throws IOException {
@@ -87,10 +106,6 @@ public class ProductClient {
         dos.writeUTF(request.toString());
         dos.flush();
 
-        JSONObject response = new JSONObject(dis.readUTF());
-        if(response.getString("status").equals("success")) {
-            list();
-        }
     }
     private void update() throws IOException {
         // 콘솔에서 변경할 상품 정보 입력받기
@@ -118,12 +133,6 @@ public class ProductClient {
         // JSON 파일을 직렬화해서 서버로 request
         dos.writeUTF(request.toString());
         dos.flush();
-
-        // 서버의 response 처리
-        JSONObject response = new JSONObject(dis.readUTF());
-        if(response.getString("status").equals("success")) {
-            list();
-        }
     }
     private void delete() throws IOException {
         // 삭제할 상품번호 입력받기
@@ -142,11 +151,6 @@ public class ProductClient {
         dos.writeUTF(request.toString());
         dos.flush();
 
-        // response
-        JSONObject response = new JSONObject(dis.readUTF());
-        if (response.getString("status").equals("success")) {
-            list();
-        }
     }
     private void exit() {
         stop();

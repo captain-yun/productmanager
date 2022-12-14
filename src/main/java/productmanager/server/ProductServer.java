@@ -10,9 +10,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Vector;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -21,9 +19,11 @@ public class ProductServer {
     private ServerSocket serverSocket;
     private ExecutorService threadPool;
     private List<Product> products;
+
+    Set<SocketClient> clients = Collections.synchronizedSet(new HashSet<>());
+
     private int sequence = 0;
 
-    //
     public static void main(String[] args) {
         // 서버 객체 생성
         ProductServer productServer = new ProductServer();
@@ -56,6 +56,31 @@ public class ProductServer {
         }
     }
 
+    private void notifyUpdatedToClients() throws IOException {
+        for (SocketClient client: clients) {
+            // response 보내기
+            // 1. JSON만들기
+            JSONObject response = new JSONObject();
+            response.put("status", "updated");
+            response.put("data", "");
+            // 2. 직렬화하기(문자열화)
+            client.dos.writeUTF(response.toString());
+            client.dos.flush();
+        }
+    }
+
+    private void addSocketClient(SocketClient socketClient) {
+        clients.add(socketClient);
+        System.out.println("새로운 클라이언트 접속");
+        System.out.println("현재 클라이언트 수: " + clients.size() + "\n");
+    }
+
+    private void removeSocketClient(SocketClient socketClient) {
+        clients.remove(socketClient);
+        System.out.println("클라이언트 나감");
+        System.out.println("현재 클라이언트 수: " + clients.size() + "\n");
+    }
+
     // 중첩 클래스
     public class SocketClient {
         private Socket socket;
@@ -69,7 +94,7 @@ public class ProductServer {
                 this.socket = socket;
                 this.dis = new DataInputStream(socket.getInputStream());
                 this.dos = new DataOutputStream(socket.getOutputStream());
-
+                addSocketClient(this);
                 receive();
             } catch (IOException e) {}
         }
@@ -107,6 +132,7 @@ public class ProductServer {
                         }
                     }
                 } catch (IOException e) {
+                    removeSocketClient(this);
                     close();
                 }
             });
@@ -116,7 +142,6 @@ public class ProductServer {
             try {
                 socket.close();
             } catch (IOException e) {}
-            System.out.println("[클라이언트] 종료됨");
         }
 
         // list
@@ -152,15 +177,8 @@ public class ProductServer {
             product.setStock(data.getInt("stock"));
             
             products.add(product);
-            
-            // response 보내기
-            // 1. JSON만들기
-            JSONObject response = new JSONObject();
-            response.put("status", "success");
-            response.put("data", "");
-            // 2. 직렬화하기(문자열화)
-            dos.writeUTF(response.toString());
-            dos.flush();
+
+            notifyUpdatedToClients();
         }
         // update
         public void update(JSONObject request) throws IOException {
@@ -177,11 +195,7 @@ public class ProductServer {
                 }
             }
             // 클라이언트한테 response
-            JSONObject response = new JSONObject();
-            response.put("status", "success");
-            response.put("data", new JSONObject());
-            dos.writeUTF(response.toString());
-            dos.flush();
+            notifyUpdatedToClients();
         }
         // delete
         public void delete(JSONObject request) throws IOException {
@@ -198,11 +212,7 @@ public class ProductServer {
             }
 
             // response
-            JSONObject response = new JSONObject();
-            response.put("status", "success");
-            response.put("data", new JSONObject());
-            dos.writeUTF(response.toString());
-            dos.flush();
+            notifyUpdatedToClients();
         }
     }
 }
